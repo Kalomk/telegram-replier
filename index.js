@@ -14,7 +14,6 @@ const app = express();
 app.use(express.json({ limit: '1tb' }));
 app.use(express.urlencoded({ limit: '1tb', extended: true }));
 
-
 bot.on("polling_error", (msg) => console.log(msg));
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
@@ -53,7 +52,7 @@ function compressVideo(buffer) {
 }
 
 app.post('/sendToGroup', async (req, res) => {
-    const { author, content, attachments,channel } = req.body;
+    const { author, content, attachments, channel } = req.body;
 
     try {
         if (attachments && attachments.length > 0) {
@@ -62,6 +61,7 @@ app.post('/sendToGroup', async (req, res) => {
             if (mediaAttachment) {
                 const response = await axios.get(mediaAttachment.url, { responseType: 'arraybuffer' });
                 let mediaBuffer = Buffer.from(response.data, 'binary');
+                const filename = mediaAttachment.filename || 'file';  // Use the filename from attachments if available
 
                 // Check if the file size exceeds 2GB
                 if (mediaBuffer.length > MAX_FILE_SIZE) {
@@ -76,10 +76,16 @@ app.post('/sendToGroup', async (req, res) => {
                     ? bot.sendPhoto.bind(bot)
                     : bot.sendDocument.bind(bot);
 
-                await sendMethod(process.env.GROUP_CHAT_ID, mediaBuffer, {
+                const options = {
                     caption: `From ${author || 'unknown'}: ${content || ''}`,
                     message_thread_id: channel
-                });
+                };
+
+                if (!mediaAttachment.content_type.startsWith('image/')) {
+                    options.filename = filename;  // Set filename for documents/videos
+                }
+
+                await sendMethod(process.env.GROUP_CHAT_ID, mediaBuffer, options);
 
                 return res.send({ success: true, message: "Media sent to the group" });
             }
@@ -88,7 +94,7 @@ app.post('/sendToGroup', async (req, res) => {
         }
 
         if (content) {
-            await bot.sendMessage(process.env.GROUP_CHAT_ID, `${author || 'unknown'}: ${content}`,{ message_thread_id: channel});
+            await bot.sendMessage(process.env.GROUP_CHAT_ID, `${author || 'unknown'}: ${content}`, { message_thread_id: channel });
             return res.send({ success: true, message: "Message sent to the group" });
         } else {
             return res.status(400).send({ error: "No content or attachments found" });
